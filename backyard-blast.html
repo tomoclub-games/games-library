@@ -2,13 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Redirecting to Backyard Blast</title>
-  <meta http-equiv="refresh" content="0; url=https://html-classic.itch.zone/html/15391250/BB_v2.1.6.2_WebGL/index.html" />
+  <title>Redirecting to ${game.name}</title>
   <script>
-    window.location.href = "https://html-classic.itch.zone/html/15391250/BB_v2.1.6.2_WebGL/index.html";
+    async function redirectToGame() {
+      try {
+        const response = await fetch('redirects.json');
+        const redirects = await response.json();
+        const game = redirects.games.find(g => g.id === 2);
+        if (game) {
+          document.body.innerHTML = `
+            Redirecting to ${game.name}
+          `;
+          window.location.href = game.url;
+        } else {
+          document.body.innerText = 'Redirect URL not found.';
+        }
+      } catch (e) {
+        document.body.innerText = 'Error loading redirect URL.';
+      }
+    }
+    redirectToGame();
   </script>
 </head>
 <body>
-  Redirecting to Backyard Blast...
+  Redirecting...
 </body>
 </html>

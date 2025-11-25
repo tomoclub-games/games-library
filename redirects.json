@@ -1,0 +1,39 @@
+{
+  "games": [
+    {
+      "id": 1,
+      "name": "The First Settlers",
+      "url": "https://html-classic.itch.zone/html/15631981/TFS_v1.1.8.2_WebGL/index.html"
+    },
+    {
+      "id": 2,
+      "name": "Backyard Blast",
+      "url": "https://html-classic.itch.zone/html/15391250/BB_v2.1.6.2_WebGL/index.html"
+    },
+    {
+      "id": 3,
+      "name": "The Crisis Crew",
+      "url": "https://html-classic.itch.zone/html/15391258/TCC_v3.1.8.3_WebGL/index.html"
+    },
+    {
+      "id": 4,
+      "name": "Secret Santa",
+      "url": "https://html-classic.itch.zone/html/15391233/SS_v4.1.10.3_WebGL/index.html"
+    },
+    {
+      "id": 6,
+      "name": "Cosmos Colour Clash",
+      "url": "https://html-classic.itch.zone/html/15391262/CCC_v6.1.5.3_WebGL/index.html"
+    },
+    {
+      "id": 7,
+      "name": "Food For Every Mood",
+      "url": "https://html-classic.itch.zone/html/15391263/FFEM_v7.1.4.3_WebGL/index.html"
+    },
+    {
+      "id": 8,
+      "name": "Jolly Jumpers",
+      "url": "https://html-classic.itch.zone/html/15391294/JJ_v8.1.4.4_WebGL/index.html"
+    }
+  ]
+}
