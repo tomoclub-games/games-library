@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Redirecting to ${game.name}</title>
+  <script>
+    async function redirectToGame() {
+      try {
+        const response = await fetch('redirects.json');
+        const redirects = await response.json();
+        const game = redirects.games.find(g => g.id === 9);
+        if (game) {
+          document.body.innerHTML = `
+            Redirecting to ${game.name}
+          `;
+          window.location.href = game.url;
+        } else {
+          document.body.innerText = 'Redirect URL not found.';
+        }
+      } catch (e) {
+        document.body.innerText = 'Error loading redirect URL.';
+      }
+    }
+    redirectToGame();
+  </script>
+</head>
+<body>
+  Redirecting...
+</body>
+</html>

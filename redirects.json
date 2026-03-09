@@ -21,6 +21,11 @@
       "url": "https://html-classic.itch.zone/html/15727607/SS_v4.1.11.1_WebGL/index.html"
     },
     {
+      "id": 5,
+      "name": "River Taxi",
+      "url": "https://html-classic.itch.zone/html/16383971/RT_v5.1.6.3_WebGL/index.html"
+    },
+    {
       "id": 6,
       "name": "Cosmos Colour Clash",
       "url": "https://html-classic.itch.zone/html/15727394/CCC_v6.1.6.1_WebGL/index.html"
@@ -34,6 +39,11 @@
       "id": 8,
       "name": "Jolly Jumpers",
       "url": "https://html-classic.itch.zone/html/15920007/JJ_v8.1.5.1_WebGL/index.html"
+    },
+    {
+      "id": 9,
+      "name": "EI Joe",
+      "url": "https://html-classic.itch.zone/html/16712001/EIJ_v9.1.0.5_WebGL/index.html"
     }
   ]
 }
