@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TomoClub AI Literacy Game Link Generator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      color: #1a1a1a;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      border: 0.5px solid #ddd;
+      padding: 2rem 2.5rem;
+      max-width: 480px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    label {
+      font-size: 13px;
+      color: #555;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 0.5px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+      color: #1a1a1a;
+      appearance: none;
+      margin-bottom: 1.25rem;
+      cursor: pointer;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #888;
+    }
+
+    .generate-btn {
+      width: 100%;
+      padding: 10px;
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 0.5rem;
+    }
+
+    .generate-btn:hover {
+      background: #333;
+    }
+
+    .result-box {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1rem 1.25rem;
+      background: #f5f5f3;
+      border-radius: 8px;
+      border: 0.5px solid #ddd;
+    }
+
+    .result-box.visible {
+      display: block;
+    }
+
+    .result-label {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+
+    .link-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .link-text {
+      font-size: 12px;
+      color: #333;
+      word-break: break-all;
+      flex: 1;
+      font-family: monospace;
+    }
+
+    .copy-btn {
+      padding: 6px 12px;
+      background: #fff;
+      border: 0.5px solid #ccc;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover {
+      background: #f0f0f0;
+    }
+
+    .copy-btn.copied {
+      color: #2a7a4f;
+      border-color: #2a7a4f;
+    }
+
+    .expiry-note {
+      font-size: 12px;
+      color: #888;
+      margin-top: 0.75rem;
+    }
+
+    .expiry-note span {
+      color: #1a1a1a;
+      font-weight: 500;
+    }
+
+    .branding {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1.75rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 0.5px solid #eee;
+    }
+
+    .branding img {
+      height: 80px;
+      width: auto;
+      object-fit: contain;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="branding">
+      <img src="https://tomoclub-games.github.io/games-library/Images/TomoClub_Logo.png" alt="TomoClub" />
+    </div>
+    <h1>AI Literacy Game Link Generator</h1>
+    <p class="subtitle">Create a time-limited link to share with your class.</p>
+
+    <label for="gameSelect">Select a game</label>
+    <select id="gameSelect"></select>
+
+    <label for="duration">How long should the link stay active?</label>
+    <select id="duration">
+      <option value="15" selected>15 minutes</option>
+      <option value="30">30 minutes</option>
+      <option value="60">1 hour</option>
+      <option value="120">2 hours</option>
+      <option value="180">3 hours</option>
+    </select>
+
+    <button class="generate-btn" onclick="generateLink()">Generate link</button>
+
+    <div class="result-box" id="resultBox">
+      <div class="result-label">Share this link with your class:</div>
+      <div class="link-row">
+        <span class="link-text" id="generatedLink">—</span>
+        <button class="copy-btn" id="copyBtn" onclick="copyLink()">Copy</button>
+      </div>
+      <div class="expiry-note">Link expires at <span id="expiryTime">—</span></div>
+    </div>
+  </div>
+
+  <script>
+    var GAMES = [
+      { name: "Veritas Lab", url: "https://tomoclub-games.github.io/games-library/veritas-lab/" }
+    ];
+
+    var SIGNING_KEY = "tomo-ai-literacy";
+
+    var sel = document.getElementById("gameSelect");
+    GAMES.forEach(function (g, i) {
+      var opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = g.name;
+      sel.appendChild(opt);
+    });
+
+    function simpleHash(str) {
+      var h = 0;
+      for (var i = 0; i < str.length; i++) {
+        h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+      }
+      return Math.abs(h).toString(36);
+    }
+
+    function generateLink() {
+      var gameIndex = parseInt(document.getElementById("gameSelect").value, 10);
+      var minutes = parseInt(document.getElementById("duration").value, 10);
+      var game = GAMES[gameIndex];
+
+      var expiry = Date.now() + minutes * 60 * 1000;
+      var signature = simpleHash(SIGNING_KEY + expiry);
+      var token = btoa(expiry + "|" + signature);
+
+      var url = new URL(game.url);
+      url.searchParams.set("token", token);
+
+      var timeStr = new Date(expiry).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      document.getElementById("generatedLink").textContent = url.toString();
+      document.getElementById("expiryTime").textContent = timeStr;
+      document.getElementById("resultBox").classList.add("visible");
+      document.getElementById("copyBtn").textContent = "Copy";
+      document.getElementById("copyBtn").classList.remove("copied");
+    }
+
+    function copyLink() {
+      var text = document.getElementById("generatedLink").textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        var btn = document.getElementById("copyBtn");
+        btn.textContent = "Copied!";
+        btn.classList.add("copied");
+        setTimeout(function () {
+          btn.textContent = "Copy";
+          btn.classList.remove("copied");
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+
+</html>
