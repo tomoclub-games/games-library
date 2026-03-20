@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case File — Image Forensics</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f11;
+    --surface: #16181c;
+    --surface2: #1e2128;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(255,255,255,0.18);
+    --text: #e8e6e0;
+    --text-muted: #6b6f78;
+    --text-dim: #9a9da6;
+    --accent: #c8ff57;
+    --accent-dim: rgba(200,255,87,0.12);
+    --red: #ff5757;
+    --red-dim: rgba(255,87,87,0.12);
+    --amber: #ffb347;
+    --amber-dim: rgba(255,179,71,0.12);
+    --blue: #57b8ff;
+    --blue-dim: rgba(87,184,255,0.10);
+    --mono: 'DM Mono', monospace;
+    --sans: 'Sora', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    color: var(--accent);
+    text-transform: uppercase;
+    border: 1px solid var(--accent);
+    padding: 4px 8px;
+    border-radius: 3px;
+  }
+  .case-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: .06em;
+  }
+  .mode-tabs {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .mode-tab {
+    padding: 7px 16px;
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    text-transform: uppercase;
+    transition: all .2s;
+  }
+  .mode-tab.active {
+    background: var(--accent);
+    color: #0e0f11;
+    font-weight: 500;
+  }
+  .mode-tab:hover:not(.active) { color: var(--text); }
+
+  /* ── LAYOUT ── */
+  .app { display: flex; height: calc(100vh - 57px); }
+
+  /* ── IMAGE PANEL ── */
+  .image-panel {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #020608;
+    overflow: visible;
+  }
+  .image-stage {
+    position: relative;
+    display: inline-block;
+    cursor: crosshair;
+    user-select: none;
+  }
+  .image-stage img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(100vh - 140px);
+    object-fit: contain;
+    border-radius: 2px;
+  }
+  .image-placeholder {
+    width: 560px;
+    height: 380px;
+    background: var(--surface);
+    border: 2px dashed var(--border-active);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .image-placeholder:hover { border-color: var(--accent); color: var(--accent); }
+  .image-placeholder .upload-icon { font-size: 32px; opacity: .5; }
+  .image-placeholder p { font-size: 13px; }
+  .image-placeholder span { font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
+
+  /* ── HOTSPOTS ── */
+  .hotspot {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+    z-index: 10;
+  }
+  .hotspot::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .hotspot .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: relative;
+    z-index: 1;
+    transition: transform .2s;
+  }
+  .hotspot:hover .dot { transform: scale(1.3); }
+  .hotspot.type-evidence { border: 1.5px solid var(--red); background: var(--red-dim); }
+  .hotspot.type-evidence::before { background: rgba(255,87,87,0.15); }
+  .hotspot.type-evidence .dot { background: var(--red); }
+  .hotspot.type-falseflag { border: 1.5px solid var(--amber); background: var(--amber-dim); }
+  .hotspot.type-falseflag::before { background: rgba(255,179,71,0.15); }
+  .hotspot.type-falseflag .dot { background: var(--amber); }
+  .hotspot.type-neutral { border: 1.5px solid var(--blue); background: var(--blue-dim); }
+  .hotspot.type-neutral::before { background: rgba(87,184,255,0.12); }
+  .hotspot.type-neutral .dot { background: var(--blue); }
+  .hotspot.active { transform: translate(-50%, -50%) scale(1.15); z-index: 20; }
+  .hotspot .num {
+    position: absolute;
+    top: -8px;
+    right: -6px;
+    background: var(--surface2);
+    border: 1px solid var(--border-active);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 9px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: .5; }
+    50% { transform: scale(1.5); opacity: 0; }
+  }
+
+  /* ── INVESTIGATE MODE: hide author controls ── */
+  body.investigate .author-only { display: none !important; }
+  body.investigate .image-stage { cursor: default; }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border-active);
+    padding: 8px;
+    border-radius: 8px;
+    z-index: 50;
+  }
+  .tool-btn {
+    padding: 7px 14px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .04em;
+    border: 1px solid transparent;
+    cursor: pointer;
+    background: none;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    transition: all .15s;
+  }
+  .tool-btn:hover { color: var(--text); border-color: var(--border-active); }
+  .tool-btn.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tool-btn.type-evidence.selected { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .tool-btn.type-falseflag.selected { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .tool-btn.type-neutral.selected { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+  .tool-sep { width: 1px; background: var(--border); margin: 0 2px; }
+
+  /* ── SIDE PANEL ── */
+  .side-panel {
+    width: 360px;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  /* ── CASE META ── */
+  .case-meta {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .case-meta-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: .1em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .case-title-input, .case-desc-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 8px 10px;
+    font-size: 13px;
+    margin-bottom: 8px;
+    transition: border-color .2s;
+    resize: none;
+  }
+  .case-title-input:focus, .case-desc-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .case-title-input { font-size: 15px; font-weight: 500; }
+
+  .verdict-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .verdict-btn {
+    flex: 1;
+    padding: 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .verdict-btn:hover { border-color: var(--border-active); color: var(--text); }
+  .verdict-btn.v-authentic.active { background: rgba(87,255,150,0.1); border-color: #57ff96; color: #57ff96; }
+  .verdict-btn.v-manipulated.active { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .verdict-btn.v-aigenerated.active { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+
+  .threat-row { display: flex; gap: 6px; margin-top: 4px; margin-bottom: 10px; }
+  .threat-btn {
+    flex: 1;
+    padding: 6px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .threat-btn:hover { border-color: var(--border-active); color: var(--text); }
+  .threat-btn.active { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .meta-field { margin-bottom: 10px; }
+  .meta-field label { display: block; font-size: 10px; font-family: var(--mono); letter-spacing: .08em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+  .meta-field input, .meta-field textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 8px 10px;
+    font-size: 12px;
+    resize: none;
+    transition: border-color .2s;
+  }
+  .meta-field input:focus, .meta-field textarea:focus { outline: none; border-color: var(--accent); }
+  .meta-field textarea { min-height: 48px; }
+
+  /* ── HOTSPOT LIST ── */
+  .hotspot-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0;
+  }
+  .hotspot-list::-webkit-scrollbar { width: 4px; }
+  .hotspot-list::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+
+  .hotspot-item {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .15s;
+    position: relative;
+  }
+  .hotspot-item:hover { background: var(--surface2); }
+  .hotspot-item.active { background: var(--surface2); }
+  .hotspot-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+  }
+  .hotspot-item.type-evidence::before { background: var(--red); }
+  .hotspot-item.type-falseflag::before { background: var(--amber); }
+  .hotspot-item.type-neutral::before { background: var(--blue); }
+
+  .hotspot-item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .type-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .type-badge.evidence { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,87,87,0.3); }
+  .type-badge.falseflag { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,179,71,0.3); }
+  .type-badge.neutral { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(87,184,255,0.3); }
+  .hs-num { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+  .delete-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+    transition: all .15s;
+  }
+  .delete-btn:hover { color: var(--red); background: var(--red-dim); }
+  .hotspot-label { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .hotspot-preview { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── EDITOR / DETAIL ── */
+  .editor-panel {
+    border-top: 1px solid var(--border);
+    padding: 16px 20px;
+    background: var(--surface2);
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 55%;
+    overflow-y: auto;
+  }
+  .editor-panel.open { display: flex; }
+  .editor-panel::-webkit-scrollbar { width: 4px; }
+  .editor-panel::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+
+  .editor-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .editor-field {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 9px 11px;
+    font-size: 12px;
+    resize: none;
+    line-height: 1.6;
+    transition: border-color .2s;
+  }
+  .editor-field:focus { outline: none; border-color: var(--accent); }
+
+  .field-group { display: flex; flex-direction: column; gap: 5px; }
+  .type-selector { display: flex; gap: 6px; }
+  .type-opt {
+    flex: 1;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: center;
+    transition: all .15s;
+  }
+  .type-opt:hover { border-color: var(--border-active); color: var(--text); }
+  .type-opt.sel-evidence { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .type-opt.sel-falseflag { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .type-opt.sel-neutral { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+  .save-btn {
+    background: var(--accent);
+    color: #0e0f11;
+    border: none;
+    border-radius: 5px;
+    padding: 9px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    font-weight: 500;
+    transition: opacity .15s;
+  }
+  .save-btn:hover { opacity: .85; }
+
+  /* ── INVESTIGATE POPUP ── */
+  .inv-popup {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border-active);
+    border-radius: 10px;
+    padding: 20px;
+    width: 300px;
+    z-index: 200;
+    display: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    animation: popIn .18s cubic-bezier(.34,1.56,.64,1);
+    pointer-events: auto;
+  }
+  .inv-popup.open { display: block; }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(.9) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .inv-popup-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .inv-popup-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .icon-evidence { background: var(--red-dim); border: 1px solid rgba(255,87,87,.4); }
+  .icon-falseflag { background: var(--amber-dim); border: 1px solid rgba(255,179,71,.4); }
+  .icon-neutral { background: var(--blue-dim); border: 1px solid rgba(87,184,255,.4); }
+  .inv-popup-label { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .inv-popup-badge { display: inline-block; margin-top: 4px; }
+  .inv-section { margin-bottom: 12px; }
+  .inv-section-title {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+  }
+  .inv-section-body { font-size: 12px; color: var(--text-dim); line-height: 1.65; }
+  .hint-box {
+    background: var(--accent-dim);
+    border: 1px solid rgba(200,255,87,.2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--accent);
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+  .inv-close {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border-active);
+    color: var(--text-muted);
+    border-radius: 5px;
+    padding: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .inv-close:hover { color: var(--text); border-color: var(--text-muted); }
+
+  /* ── VERDICT REVEAL (investigate mode) ── */
+  .verdict-reveal {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 50;
+    display: none;
+  }
+  body.investigate .verdict-reveal { display: flex; }
+  body.investigate .toolbar { display: none; }
+
+  .verdict-reveal-btn {
+    background: var(--surface);
+    border: 1px solid var(--border-active);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .verdict-reveal-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .verdict-answer {
+    background: var(--surface);
+    border: 1px solid var(--border-active);
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    display: none;
+  }
+  .verdict-answer.shown { display: block; }
+  .verdict-answer.v-authentic { border-color: #57ff96; color: #57ff96; }
+  .verdict-answer.v-manipulated { border-color: var(--red); color: var(--red); }
+  .verdict-answer.v-aigenerated { border-color: var(--blue); color: var(--blue); }
+
+  /* ── PROGRESS (investigate) ── */
+  .progress-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--border);
+    display: none;
+    z-index: 100;
+  }
+  body.investigate .progress-bar { display: block; }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width .4s ease;
+    border-radius: 1px;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-hotspots {
+    padding: 24px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.7;
+    display: none;
+  }
+  .empty-hotspots.show { display: block; }
+
+  /* ── INVESTIGATE SIDE ── */
+  .inv-side-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .inv-case-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; line-height: 1.35; }
+  .inv-case-desc { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+  .inv-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .inv-stat {
+    background: var(--surface2);
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .inv-stat-val { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+  .inv-stat-val.c-red { color: var(--red); }
+  .inv-stat-val.c-amber { color: var(--amber); }
+  .inv-stat-val.c-blue { color: var(--blue); }
+  .inv-stat-label { font-size: 9px; color: var(--text-muted); letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
+
+  .inv-legend {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .legend-title { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; color: var(--text-dim); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-dot.red { background: var(--red); }
+  .legend-dot.amber { background: var(--amber); }
+  .legend-dot.blue { background: var(--blue); }
+
+  .inv-found-list { flex: 1; overflow-y: auto; padding: 12px 0; }
+  .inv-found-list::-webkit-scrollbar { width: 4px; }
+  .inv-found-list::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+  .inv-found-item {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: .35;
+    transition: opacity .3s;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .inv-found-item.found { opacity: 1; }
+  .inv-found-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .check-icon { margin-left: auto; color: var(--accent); font-size: 14px; display: none; }
+  .inv-found-item.found .check-icon { display: block; }
+  .inv-found-item.found .inv-found-dot.red { background: var(--red); }
+  .inv-found-item.found .inv-found-dot.amber { background: var(--amber); }
+  .inv-found-item.found .inv-found-dot.blue { background: var(--blue); }
+
+  input[type=file] { display: none; }
+  .coords { font-family: var(--mono); font-size: 9px; color: var(--text-muted); letter-spacing: .05em; }
+
+  /* ── UPLOAD BUTTON ── */
+  .upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .04em;
+    border: 1px solid var(--border-active);
+    cursor: pointer;
+    background: none;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    transition: all .15s;
+  }
+  .upload-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+  .upload-btn svg { flex-shrink: 0; }
+
+  /* ── DRAG-DROP OVERLAY ── */
+  .drag-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(14,15,17,0.88);
+    border: 2px dashed var(--accent);
+    border-radius: 6px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 80;
+    pointer-events: none;
+  }
+  .drag-overlay.active { display: flex; }
+  .drag-overlay-icon { font-size: 40px; opacity: .7; }
+  .drag-overlay-text { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ── IMAGE CHANGE TOAST ── */
+  .img-toast {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    background: var(--surface2);
+    border: 1px solid var(--border-active);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: opacity .3s, transform .3s;
+    pointer-events: none;
+    z-index: 90;
+  }
+  .img-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── SAMPLE DATA BANNER ── */
+  .sample-banner {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border-active);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: .06em;
+    z-index: 30;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Forensica</div>
+    <div class="case-id" id="caseIdDisplay">CASE — NEW</div>
+  </div>
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="setMode('author')">Author</button>
+    <button class="mode-tab" onclick="setMode('investigate')">Investigate</button>
+  </div>
+</div>
+
+<div class="app">
+  <!-- IMAGE PANEL -->
+  <div class="image-panel" id="imagePanel">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="sample-banner" id="sampleBanner">Sample case loaded</div>
+    <div class="drag-overlay" id="dragOverlay">
+      <div class="drag-overlay-icon">⬆</div>
+      <div class="drag-overlay-text">Drop image to load</div>
+    </div>
+    <div class="img-toast" id="imgToast">Image loaded</div>
+
+    <div class="image-stage" id="imageStage" onclick="handleStageClick(event)">
+      <img id="mainImage" src="" alt="Case image" style="display:none">
+      <div class="image-placeholder" id="uploadPlaceholder" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon">⬆</div>
+        <p>Upload case image</p>
+        <span>PNG, JPG, WEBP — click or drag anywhere</span>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" onchange="handleImageUpload(event)">
+    </div>
+
+    <!-- AUTHOR TOOLBAR -->
+    <div class="toolbar author-only">
+      <button class="upload-btn" onclick="document.getElementById('fileInput').click()" title="Upload image (or drag & drop anywhere)">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6.5 1v8M3.5 4l3-3 3 3M2 11h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Upload image
+      </button>
+      <div class="tool-sep"></div>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;padding:0 6px;line-height:32px;">Place:</span>
+      <button class="tool-btn type-evidence" id="btn-evidence" onclick="selectTool('evidence')">Evidence</button>
+      <button class="tool-btn type-falseflag" id="btn-falseflag" onclick="selectTool('falseflag')">False flag</button>
+      <button class="tool-btn type-neutral" id="btn-neutral" onclick="selectTool('neutral')">Neutral</button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" onclick="loadSample()">Load sample</button>
+      <button class="tool-btn" onclick="exportCase()">Export JSON</button>
+    </div>
+
+    <!-- INVESTIGATE VERDICT -->
+    <div class="verdict-reveal">
+      <button class="verdict-reveal-btn" onclick="revealVerdict()">Reveal verdict</button>
+      <div class="verdict-answer" id="verdictAnswer"></div>
+    </div>
+  </div>
+
+  <!-- SIDE PANEL: AUTHOR MODE -->
+  <div class="side-panel" id="authorPanel">
+    <div class="case-meta author-only">
+      <div class="case-meta-title">Case details</div>
+      <input class="case-title-input" id="caseTitleInput" placeholder="Case title…" oninput="updateCaseMeta()">
+      <textarea class="case-desc-input" id="caseDescInput" rows="2" placeholder="Brief description for investigators…" oninput="updateCaseMeta()"></textarea>
+      <div class="meta-field">
+        <label for="contextInput">Context (intel / provenance)</label>
+        <textarea class="case-desc-input" id="contextInput" rows="2" placeholder="e.g. Submitted via insurance portal. EXIF absent." oninput="updateCaseMeta()"></textarea>
+      </div>
+      <div class="editor-title" style="margin-bottom:6px">Threat level</div>
+      <div class="threat-row">
+        <button type="button" class="threat-btn" data-threat="CRITICAL" onclick="setThreat('CRITICAL')">Critical</button>
+        <button type="button" class="threat-btn" data-threat="HIGH" onclick="setThreat('HIGH')">High</button>
+        <button type="button" class="threat-btn" data-threat="MEDIUM" onclick="setThreat('MEDIUM')">Medium</button>
+      </div>
+      <div class="meta-field">
+        <label for="mediaLabelInput">Media label</label>
+        <input type="text" id="mediaLabelInput" placeholder="e.g. TOUR_GROUP_BERLIN.png" oninput="updateCaseMeta()">
+      </div>
+      <div class="editor-title" style="margin-bottom:6px">Verdict (answer key)</div>
+      <div class="verdict-row">
+        <button class="verdict-btn v-authentic" onclick="setVerdict('authentic')">Authentic</button>
+        <button class="verdict-btn v-manipulated" onclick="setVerdict('manipulated')">Manipulated</button>
+        <button class="verdict-btn v-aigenerated" onclick="setVerdict('aigenerated')">AI-generated</button>
+      </div>
+      <div class="meta-field" style="margin-top:10px">
+        <label for="verdictExplanationInput">Verdict explanation</label>
+        <textarea id="verdictExplanationInput" rows="3" placeholder="Post-report text shown when verdict is correct…" oninput="updateCaseMeta()"></textarea>
+      </div>
+    </div>
+
+    <div class="hotspot-list" id="hotspotList">
+      <div class="empty-hotspots show" id="emptyState">
+        <p style="margin-bottom:6px">No hotspots yet.</p>
+        <p>Select a type in the toolbar,<br>then click the image to place.</p>
+      </div>
+    </div>
+
+    <div class="editor-panel" id="editorPanel">
+      <div class="editor-title">Editing hotspot <span id="editingNum">—</span></div>
+      <div class="field-group">
+        <div class="editor-title">Label</div>
+        <input class="editor-field" id="fieldLabel" placeholder="e.g. Compression artifact, Hand anatomy…">
+      </div>
+      <div class="field-group">
+        <div class="editor-title">Type</div>
+        <div class="type-selector">
+          <button class="type-opt" id="opt-evidence" onclick="setHotspotType('evidence')">Evidence</button>
+          <button class="type-opt" id="opt-falseflag" onclick="setHotspotType('falseflag')">False flag</button>
+          <button class="type-opt" id="opt-neutral" onclick="setHotspotType('neutral')">Neutral</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="editor-title">Technical finding</div>
+        <textarea class="editor-field" id="fieldFinding" rows="2" placeholder="What does a forensic tool or close inspection reveal here?"></textarea>
+      </div>
+      <div class="field-group">
+        <div class="editor-title">Investigator hint</div>
+        <textarea class="editor-field" id="fieldHint" rows="2" placeholder="Guide the student — what should they look for or think about?"></textarea>
+      </div>
+      <button class="save-btn" onclick="saveHotspot()">Save hotspot</button>
+    </div>
+  </div>
+
+  <!-- SIDE PANEL: INVESTIGATE MODE (hidden in author) -->
+  <div class="side-panel" id="investigatePanel" style="display:none">
+    <div class="inv-side-header">
+      <div class="inv-case-title" id="invCaseTitle">Untitled Case</div>
+      <div class="inv-case-desc" id="invCaseDesc">No description provided.</div>
+      <div class="inv-stats">
+        <div class="inv-stat">
+          <div class="inv-stat-val c-red" id="statEvidence">0</div>
+          <div class="inv-stat-label">Evidence</div>
+        </div>
+        <div class="inv-stat">
+          <div class="inv-stat-val c-amber" id="statFalse">0</div>
+          <div class="inv-stat-label">False flags</div>
+        </div>
+        <div class="inv-stat">
+          <div class="inv-stat-val c-blue" id="statNeutral">0</div>
+          <div class="inv-stat-label">Neutral</div>
+        </div>
+      </div>
+    </div>
+    <div class="inv-legend">
+      <div class="legend-title">Legend</div>
+      <div class="legend-item"><div class="legend-dot red"></div>Real forensic evidence — genuine manipulation or AI artifact</div>
+      <div class="legend-item"><div class="legend-dot amber"></div>False flag — looks suspicious but is actually innocent</div>
+      <div class="legend-item"><div class="legend-dot blue"></div>Neutral zone — nothing significant here</div>
+    </div>
+    <div class="inv-found-list" id="invFoundList"></div>
+  </div>
+</div>
+
+<!-- INVESTIGATE POPUP -->
+<div class="inv-popup" id="invPopup">
+  <div class="inv-popup-header">
+    <div class="inv-popup-icon" id="popupIcon"></div>
+    <div>
+      <div class="inv-popup-label" id="popupLabel"></div>
+      <div class="inv-popup-badge">
+        <span class="type-badge" id="popupBadge"></span>
+      </div>
+    </div>
+  </div>
+  <div class="inv-section" id="popupFindingSection">
+    <div class="inv-section-title">Technical finding</div>
+    <div class="inv-section-body" id="popupFinding"></div>
+  </div>
+  <div class="inv-section">
+    <div class="inv-section-title">Investigator hint</div>
+    <div class="hint-box" id="popupHint"></div>
+  </div>
+  <button class="inv-close" onclick="closePopup()">Close ✕</button>
+</div>
+
+<script>
+// ── STATE ──
+let state = {
+  mode: 'author',
+  activeTool: null,
+  hotspots: [],
+  activeHotspot: null,
+  verdict: null,
+  caseTitle: '',
+  caseDesc: '',
+  context: '',
+  threat: 'MEDIUM',
+  mediaLabel: '',
+  verdictExplanation: '',
+  hasImage: false,
+  foundHotspots: new Set()
+};
+
+// ── SAMPLE DATA ──
+const SAMPLE = {
+  caseTitle: 'Urban Street Scene — Provenance Unknown',
+  caseDesc: 'This image was submitted as documentary evidence. Examine the highlighted regions and determine whether the scene is authentic, manipulated, or fully AI-generated.',
+  context: 'Posted anonymously. Reverse image search shows no prior appearances. EXIF stripped.',
+  threat: 'HIGH',
+  mediaLabel: 'URBAN_STREET_SCENE.png',
+  verdict: 'aigenerated',
+  verdictExplanation: 'Correct. This is an AI-generated image. Multiple forensic cues — background depth, hand anatomy, pseudo-text — indicate synthesis rather than capture.',
+  hotspots: [
+    {
+      id: 1, x: 72, y: 38, type: 'evidence',
+      label: 'Background depth inconsistency',
+      finding: 'Error Level Analysis (ELA) shows uniform noise distribution across the entire background — characteristic of latent diffusion synthesis. Real photographs show sensor noise variation with depth.',
+      hint: 'In real photos, objects at different distances show different levels of sharpness and noise. Ask yourself: does the background "feel" like it recedes naturally, or does it look like a flat painted scene?'
+    },
+    {
+      id: 2, x: 35, y: 62, type: 'evidence',
+      label: 'Hand anatomy failure',
+      finding: 'The left hand in frame shows 6 finger-like structures with incorrect joint proportions. Diffusion models frequently misrender hands due to their complexity in training data.',
+      hint: 'Hands are notoriously difficult for AI to generate correctly. Count the fingers carefully — and look at how the knuckles and joints are shaped. Do they follow natural anatomy?'
+    },
+    {
+      id: 3, x: 58, y: 71, type: 'falseflag',
+      label: 'Compression blocking (JPEG artifact)',
+      finding: 'The 8×8 pixel blocking pattern visible in this region is standard JPEG compression quantization — not a sign of splicing or cloning. Present in all JPEG images at this quality level.',
+      hint: 'This blocky pattern looks alarming, but it\'s actually just what happens when any JPEG image is saved at medium quality. It is NOT evidence of manipulation — it\'s a camera/format artifact.'
+    },
+    {
+      id: 4, x: 82, y: 55, type: 'evidence',
+      label: 'Text rendering failure',
+      finding: 'Signage in the background contains pseudo-text: letter-like shapes that do not form real words in any language. Diffusion models hallucinate text as visual patterns without semantic meaning.',
+      hint: 'Zoom into any text in the scene — shop signs, labels, graffiti. Can you read what it says? AI-generated images almost always produce garbled, nonsensical characters instead of real text.'
+    },
+    {
+      id: 5, x: 20, y: 28, type: 'falseflag',
+      label: 'Lens flare / chromatic aberration',
+      finding: 'The colour fringing visible at this high-contrast edge is chromatic aberration — a natural optical artifact in camera lenses. AI image generators are trained on real photos and replicate this effect faithfully.',
+      hint: 'Chromatic aberration (colour fringing at edges) is often thought to prove a photo is real. However, modern AI generators learn to reproduce this because it appears in their training data. It cannot be used as proof of authenticity.'
+    },
+    {
+      id: 6, x: 50, y: 88, type: 'neutral',
+      label: 'Ground surface texture',
+      finding: 'Texture analysis shows no significant anomalies. Noise distribution is consistent with surrounding regions. No clone detection matches found.',
+      hint: 'Sometimes a region just looks a little odd due to lighting. This area has nothing forensically significant — move on to other hotspots.'
+    }
+  ]
+};
+
+// ── INIT ──
+function init() {
+  loadSample();
+}
+
+function loadSample() {
+  state.caseTitle = SAMPLE.caseTitle;
+  state.caseDesc = SAMPLE.caseDesc;
+  state.context = SAMPLE.context || '';
+  state.threat = SAMPLE.threat || 'MEDIUM';
+  state.mediaLabel = SAMPLE.mediaLabel || '';
+  state.verdict = SAMPLE.verdict;
+  state.verdictExplanation = SAMPLE.verdictExplanation || '';
+  state.hotspots = SAMPLE.hotspots.map(h => ({...h}));
+  state.hasImage = true;
+  state.foundHotspots = new Set();
+
+  document.getElementById('caseTitleInput').value = state.caseTitle;
+  document.getElementById('caseDescInput').value = state.caseDesc;
+  document.getElementById('contextInput').value = state.context;
+  document.getElementById('mediaLabelInput').value = state.mediaLabel;
+  document.getElementById('verdictExplanationInput').value = state.verdictExplanation;
+  document.getElementById('caseIdDisplay').textContent = 'CASE — 2025-001';
+  setThreat(state.threat);
+  setVerdict(state.verdict, false);
+
+  // Show placeholder image (coloured canvas stand-in)
+  const img = document.getElementById('mainImage');
+  const canvas = document.createElement('canvas');
+  canvas.width = 640; canvas.height = 420;
+  const ctx = canvas.getContext('2d');
+  // Painterly grey scene background
+  const bg = ctx.createLinearGradient(0, 0, 0, 420);
+  bg.addColorStop(0, '#1c2030'); bg.addColorStop(1, '#141820');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 640, 420);
+  // Fake building shapes
+  ctx.fillStyle = '#222840';
+  ctx.fillRect(40, 60, 120, 320);
+  ctx.fillRect(200, 100, 90, 280);
+  ctx.fillRect(380, 80, 150, 300);
+  ctx.fillRect(560, 120, 60, 260);
+  // Windows
+  ctx.fillStyle = '#ffe080'; const wins = [[55,90,30,20],[55,130,30,20],[55,170,30,20],[90,90,30,20],[90,130,30,20],[215,140,20,15],[215,175,20,15],[215,210,20,15],[395,120,25,18],[395,160,25,18],[430,120,25,18],[430,160,25,18]];
+  wins.forEach(([x,y,w,h]) => { ctx.fillStyle = Math.random()>.4?'#ffe07088':'#334'; ctx.fillRect(x,y,w,h); });
+  // Street
+  ctx.fillStyle = '#1a1c24'; ctx.fillRect(0, 340, 640, 80);
+  ctx.fillStyle = '#ffffff22'; ctx.fillRect(100, 375, 80, 8); ctx.fillRect(280, 375, 80, 8); ctx.fillRect(460, 375, 80, 8);
+  // Figures (distorted)
+  ctx.fillStyle = '#334166'; ctx.fillRect(160, 270, 28, 70); ctx.fillRect(290, 250, 24, 90);
+  // Garbled sign text
+  ctx.fillStyle = '#ff6633'; ctx.font = '13px monospace'; ctx.fillText('SHΩPρ∆', 385, 115);
+  ctx.fillStyle = '#4488ff'; ctx.fillText('Cα⌀FÉ', 215, 135);
+  // Overlay label
+  ctx.fillStyle = 'rgba(200,255,87,0.06)'; ctx.fillRect(0, 0, 640, 420);
+  ctx.strokeStyle = 'rgba(200,255,87,0.08)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 640; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 420); ctx.stroke(); }
+  for (let i = 0; i < 420; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(640, i); ctx.stroke(); }
+  // Subtle noise
+  const idata = ctx.getImageData(0, 0, 640, 420);
+  for (let i = 0; i < idata.data.length; i += 4) { const n = (Math.random()-0.5)*12; idata.data[i]+=n; idata.data[i+1]+=n; idata.data[i+2]+=n; }
+  ctx.putImageData(idata, 0, 0);
+
+  img.src = canvas.toDataURL();
+  img.style.display = 'block';
+  document.getElementById('uploadPlaceholder').style.display = 'none';
+
+  renderHotspots();
+  renderHotspotList();
+  updateInvestigateSide();
+}
+
+// ── IMAGE UPLOAD ──
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  loadImageFile(file);
+  // reset so same file can be re-selected
+  e.target.value = '';
+}
+
+function loadImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('mainImage');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    document.getElementById('uploadPlaceholder').style.display = 'none';
+    document.getElementById('sampleBanner').style.display = 'none';
+    state.hasImage = true;
+    state.hotspots = [];
+    editingId = null;
+    document.getElementById('editorPanel').classList.remove('open');
+    renderHotspots();
+    renderHotspotList();
+    showToast('Image loaded — ' + file.name.slice(0, 28));
+  };
+  reader.readAsDataURL(file);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('imgToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── DRAG & DROP ──
+(function initDragDrop() {
+  const panel = document.getElementById('imagePanel');
+  const overlay = document.getElementById('dragOverlay');
+  let dragCounter = 0;
+
+  panel.addEventListener('dragenter', e => {
+    e.preventDefault();
+    dragCounter++;
+    overlay.classList.add('active');
+  });
+  panel.addEventListener('dragleave', e => {
+    dragCounter--;
+    if (dragCounter === 0) overlay.classList.remove('active');
+  });
+  panel.addEventListener('dragover', e => { e.preventDefault(); });
+  panel.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCounter = 0;
+    overlay.classList.remove('active');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImageFile(file);
+  });
+
+  // Also support dropping anywhere on the body
+  document.body.addEventListener('dragover', e => e.preventDefault());
+  document.body.addEventListener('drop', e => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImageFile(file);
+  });
+})();
+
+// ── TOOL SELECTION ──
+function selectTool(type) {
+  state.activeTool = state.activeTool === type ? null : type;
+  ['evidence','falseflag','neutral'].forEach(t => {
+    document.getElementById('btn-'+t).classList.toggle('selected', state.activeTool === t);
+  });
+  document.getElementById('imagePanel').style.cursor = state.activeTool ? 'crosshair' : 'default';
+}
+
+// ── CLICK TO PLACE / SELECT ──
+function handleStageClick(e) {
+  if (e.target.closest('.hotspot')) return;
+  if (!state.hasImage) return;
+  if (state.mode === 'author') {
+    if (!state.activeTool) return;
+    const stage = document.getElementById('imageStage');
+    const rect = stage.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    const id = Date.now();
+    const hs = { id, x: parseFloat(xPct.toFixed(1)), y: parseFloat(yPct.toFixed(1)), type: state.activeTool, label: '', finding: '', hint: '' };
+    state.hotspots.push(hs);
+    renderHotspots();
+    renderHotspotList();
+    openEditor(id);
+  }
+}
+
+// ── RENDER HOTSPOTS ──
+function renderHotspots() {
+  document.querySelectorAll('.hotspot').forEach(h => h.remove());
+  const stage = document.getElementById('imageStage');
+  state.hotspots.forEach((hs, i) => {
+    const el = document.createElement('div');
+    el.className = `hotspot type-${hs.type}`;
+    el.style.left = hs.x + '%';
+    el.style.top = hs.y + '%';
+    el.dataset.id = hs.id;
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    const num = document.createElement('div');
+    num.className = 'num';
+    num.textContent = i + 1;
+    el.appendChild(dot);
+    el.appendChild(num);
+    el.onclick = (e) => { e.stopPropagation(); handleHotspotClick(hs.id); };
+    stage.appendChild(el);
+  });
+}
+
+// ── HOTSPOT CLICK ──
+function handleHotspotClick(id) {
+  const hs = state.hotspots.find(h => h.id === id);
+  if (!hs) return;
+  if (state.mode === 'author') {
+    openEditor(id);
+  } else {
+    openInvPopup(hs);
+    state.foundHotspots.add(id);
+    updateFoundList();
+    updateProgress();
+  }
+  // Highlight active hotspot
+  document.querySelectorAll('.hotspot').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.id) === id);
+  });
+}
+
+// ── EDITOR ──
+let editingId = null;
+function openEditor(id) {
+  const hs = state.hotspots.find(h => h.id === id);
+  if (!hs) return;
+  editingId = id;
+  state.activeHotspot = id;
+  const idx = state.hotspots.indexOf(hs);
+  document.getElementById('editingNum').textContent = idx + 1;
+  document.getElementById('fieldLabel').value = hs.label || '';
+  document.getElementById('fieldFinding').value = hs.finding || '';
+  document.getElementById('fieldHint').value = hs.hint || '';
+  ['evidence','falseflag','neutral'].forEach(t => {
+    document.getElementById('opt-'+t).className = 'type-opt' + (hs.type === t ? ` sel-${t}` : '');
+  });
+  document.getElementById('editorPanel').classList.add('open');
+  // Highlight in list
+  document.querySelectorAll('.hotspot-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.id) === id);
+  });
+}
+
+function setHotspotType(type) {
+  if (editingId === null) return;
+  const hs = state.hotspots.find(h => h.id === editingId);
+  if (hs) {
+    hs.type = type;
+    ['evidence','falseflag','neutral'].forEach(t => {
+      document.getElementById('opt-'+t).className = 'type-opt' + (type === t ? ` sel-${t}` : '');
+    });
+    renderHotspots();
+    renderHotspotList();
+  }
+}
+
+function saveHotspot() {
+  if (editingId === null) return;
+  const hs = state.hotspots.find(h => h.id === editingId);
+  if (hs) {
+    hs.label = document.getElementById('fieldLabel').value;
+    hs.finding = document.getElementById('fieldFinding').value;
+    hs.hint = document.getElementById('fieldHint').value;
+    renderHotspots();
+    renderHotspotList();
+  }
+}
+
+function deleteHotspot(id) {
+  state.hotspots = state.hotspots.filter(h => h.id !== id);
+  if (editingId === id) {
+    editingId = null;
+    document.getElementById('editorPanel').classList.remove('open');
+  }
+  renderHotspots();
+  renderHotspotList();
+}
+
+// ── HOTSPOT LIST ──
+function renderHotspotList() {
+  const list = document.getElementById('hotspotList');
+  const empty = document.getElementById('emptyState');
+  list.querySelectorAll('.hotspot-item').forEach(e => e.remove());
+  empty.classList.toggle('show', state.hotspots.length === 0);
+  state.hotspots.forEach((hs, i) => {
+    const el = document.createElement('div');
+    el.className = `hotspot-item type-${hs.type}`;
+    el.dataset.id = hs.id;
+    el.innerHTML = `
+      <div class="hotspot-item-header">
+        <span class="hs-num">#${i+1}</span>
+        <span class="type-badge ${hs.type}">${hs.type === 'falseflag' ? 'False flag' : hs.type.charAt(0).toUpperCase()+hs.type.slice(1)}</span>
+        <button class="delete-btn author-only" onclick="event.stopPropagation();deleteHotspot(${hs.id})">×</button>
+      </div>
+      <div class="hotspot-label">${hs.label || '<span style="color:var(--text-muted);font-style:italic">Unlabeled</span>'}</div>
+      <div class="hotspot-preview">${hs.hint || hs.finding || '<span style="color:var(--text-muted);font-style:italic">No content yet</span>'}</div>
+      <div class="coords">${hs.x}%, ${hs.y}%</div>
+    `;
+    el.onclick = () => handleHotspotClick(hs.id);
+    list.appendChild(el);
+  });
+}
+
+// ── INVESTIGATE POPUP ──
+function openInvPopup(hs) {
+  const popup = document.getElementById('invPopup');
+  const iconMap = { evidence: '🔍', falseflag: '⚠', neutral: '○' };
+  const iconClass = { evidence: 'icon-evidence', falseflag: 'icon-falseflag', neutral: 'icon-neutral' };
+  const badgeMap = { evidence: 'evidence', falseflag: 'falseflag', neutral: 'neutral' };
+  const badgeText = { evidence: 'Evidence', falseflag: 'False flag', neutral: 'Neutral' };
+
+  document.getElementById('popupIcon').className = `inv-popup-icon ${iconClass[hs.type]}`;
+  document.getElementById('popupIcon').textContent = iconMap[hs.type];
+  document.getElementById('popupLabel').textContent = hs.label || 'Hotspot';
+  const badge = document.getElementById('popupBadge');
+  badge.className = `type-badge ${badgeMap[hs.type]}`;
+  badge.textContent = badgeText[hs.type];
+  document.getElementById('popupFinding').textContent = hs.finding || 'No finding recorded.';
+  document.getElementById('popupHint').textContent = hs.hint || 'No hint recorded.';
+  document.getElementById('popupFindingSection').style.display = hs.finding ? 'block' : 'none';
+
+  // Position near hotspot
+  const stage = document.getElementById('imageStage');
+  const sr = stage.getBoundingClientRect();
+  let px = sr.left + (hs.x / 100) * sr.width + 20;
+  let py = sr.top + (hs.y / 100) * sr.height - 60;
+  if (px + 310 > window.innerWidth - 370) px = sr.left + (hs.x / 100) * sr.width - 330;
+  if (py < 70) py = 70;
+  popup.style.left = px + 'px';
+  popup.style.top = py + 'px';
+  popup.classList.add('open');
+}
+
+function closePopup() {
+  document.getElementById('invPopup').classList.remove('open');
+  document.querySelectorAll('.hotspot').forEach(h => h.classList.remove('active'));
+}
+
+// ── INVESTIGATE SIDE ──
+function updateInvestigateSide() {
+  document.getElementById('invCaseTitle').textContent = state.caseTitle || 'Untitled Case';
+  document.getElementById('invCaseDesc').textContent = state.caseDesc || 'No description provided.';
+  const counts = { evidence: 0, falseflag: 0, neutral: 0 };
+  state.hotspots.forEach(h => counts[h.type]++);
+  document.getElementById('statEvidence').textContent = counts.evidence;
+  document.getElementById('statFalse').textContent = counts.falseflag;
+  document.getElementById('statNeutral').textContent = counts.neutral;
+
+  const list = document.getElementById('invFoundList');
+  list.innerHTML = '';
+  state.hotspots.forEach((hs, i) => {
+    const found = state.foundHotspots.has(hs.id);
+    const dotColor = { evidence: 'red', falseflag: 'amber', neutral: 'blue' }[hs.type];
+    const el = document.createElement('div');
+    el.className = `inv-found-item${found ? ' found' : ''}`;
+    el.dataset.id = hs.id;
+    el.innerHTML = `<div class="inv-found-dot ${dotColor}"></div><span>${hs.label || 'Hotspot ' + (i+1)}</span><span class="check-icon">✓</span>`;
+    el.onclick = () => handleHotspotClick(hs.id);
+    list.appendChild(el);
+  });
+}
+
+function updateFoundList() {
+  document.querySelectorAll('.inv-found-item').forEach(el => {
+    const id = parseInt(el.dataset.id);
+    el.classList.toggle('found', state.foundHotspots.has(id));
+  });
+}
+
+function updateProgress() {
+  const pct = state.hotspots.length ? (state.foundHotspots.size / state.hotspots.length) * 100 : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ── VERDICT ──
+function setVerdict(v, render = true) {
+  state.verdict = v;
+  if (render) {
+    ['authentic','manipulated','aigenerated'].forEach(vv => {
+      document.querySelector(`.verdict-btn.v-${vv}`)?.classList.toggle('active', vv === v);
+    });
+  }
+}
+
+function revealVerdict() {
+  const ans = document.getElementById('verdictAnswer');
+  const labels = { authentic: 'Authentic image', manipulated: 'Manipulated image', aigenerated: 'AI-generated image' };
+  ans.textContent = labels[state.verdict] || 'Verdict not set';
+  ans.className = `verdict-answer shown v-${state.verdict}`;
+}
+
+// ── MODE SWITCH ──
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll('.mode-tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && mode === 'author') || (i === 1 && mode === 'investigate'));
+  });
+  document.body.classList.toggle('investigate', mode === 'investigate');
+  document.getElementById('authorPanel').style.display = mode === 'author' ? 'flex' : 'none';
+  document.getElementById('investigatePanel').style.display = mode === 'investigate' ? 'flex' : 'none';
+  document.getElementById('authorPanel').style.flexDirection = 'column';
+  document.getElementById('investigatePanel').style.flexDirection = 'column';
+  closePopup();
+  if (mode === 'investigate') {
+    state.foundHotspots = new Set();
+    document.getElementById('verdictAnswer').className = 'verdict-answer';
+    updateInvestigateSide();
+    updateProgress();
+  }
+  renderHotspots();
+}
+
+// ── CASE META ──
+function updateCaseMeta() {
+  state.caseTitle = document.getElementById('caseTitleInput').value;
+  state.caseDesc = document.getElementById('caseDescInput').value;
+  state.context = document.getElementById('contextInput').value;
+  state.mediaLabel = document.getElementById('mediaLabelInput').value;
+  state.verdictExplanation = document.getElementById('verdictExplanationInput').value;
+}
+
+function setThreat(level) {
+  state.threat = level;
+  document.querySelectorAll('.threat-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.threat === level);
+  });
+}
+
+// ── EXPORT (VERITAS CASE FORMAT) ──
+function exportCase() {
+  updateCaseMeta(); // ensure all form values are in state
+  // Map authoring hotspots → game hotspot shape
+  const mappedHotspots = state.hotspots.map((hs, i) => ({
+    id: `h${i + 1}`,
+    x: hs.x,
+    y: hs.y,
+    label: hs.label || `Hotspot ${i + 1}`,
+    correct: hs.type === 'evidence',
+    detail: hs.finding || hs.hint || '',
+    icon:
+      hs.type === 'evidence'
+        ? '🔦'
+        : hs.type === 'falseflag'
+        ? '✗'
+        : '👁️',
+  }));
+
+  // Match one entry of the CASES constant in App.jsx
+  const data = {
+    id: 0, // fill in manually when adding to CASES
+    title: state.caseTitle || 'Untitled Case',
+    threat: state.threat || 'MEDIUM',
+    description: state.caseDesc || '',
+    context: state.context || '',
+    mediaType: 'image', // tool currently authors image cases
+    mediaLabel: state.mediaLabel || 'CASE_IMAGE.png',
+    imageUrl: null, // in App.jsx set to e.g. `${import.meta.env.BASE_URL}your-file.ext`
+    hotspots: mappedHotspots,
+    verdict:
+      state.verdict === 'aigenerated'
+        ? 'synthetic'
+        : state.verdict || 'manipulated',
+    verdictExplanation: state.verdictExplanation || '',
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(data, null, 2)],
+    { type: 'application/json' }
+  );
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.caseTitle || 'case').replace(/\s+/g, '-').toLowerCase() + '.json';
+  a.click();
+}
+
+// ── START ──
+init();
+</script>
+</body>
+</html>
